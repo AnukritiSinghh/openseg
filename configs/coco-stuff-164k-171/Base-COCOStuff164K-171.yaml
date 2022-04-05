@@ -17,7 +17,7 @@ DATASETS:
   TRAIN: ("coco_2017_train_stuff_sem_seg",)
   TEST: ("coco_2017_test_stuff_sem_seg",)
 SOLVER:
-  IMS_PER_BATCH: 32
+  IMS_PER_BATCH: 16
   BASE_LR: 0.0001
   MAX_ITER: 60000
   WARMUP_FACTOR: 1.0
@@ -55,5 +55,5 @@ TEST:
     FLIP: True
 DATALOADER:
   FILTER_EMPTY_ANNOTATIONS: True
-  NUM_WORKERS: 4
+  NUM_WORKERS: 1
 VERSION: 2
