@@ -13,7 +13,7 @@ MODEL:
 DATASETS:
   TRAIN: ("coco_2017_train_stuff_base_sem_seg_classification",)
   TEST: ("coco_2017_test_stuff_sem_seg_classification",)
-  SAMPLE_PER_CLASS: 32
+  SAMPLE_PER_CLASS: 16
 INPUT:
   MIN_SIZE_TRAIN: (224,244)
   MIN_SIZE_TEST: 224
@@ -29,8 +29,8 @@ SOLVER:
   WARMUP_METHOD: "constant"  
   WARMUP_FACTOR: 0.005
   WARMUP_ITERS: 100
-  IMS_PER_BATCH: 32
-  TEST_IMS_PER_BATCH: 4
+  IMS_PER_BATCH: 16
+  TEST_IMS_PER_BATCH: 2
   MAX_ITER: 16000
   CHECKPOINT_PERIOD: 1000
 TEST:
