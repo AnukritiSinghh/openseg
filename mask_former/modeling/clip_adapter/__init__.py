@@ -17,7 +17,7 @@ def build_prompt_learner(cfg):
         prompt_learner = ImageNetPromptExtractor()
     elif cfg.PROMPT_LEARNER == "vild":
         prompt_learner = VILDPromptExtractor()
-    elif cfg.PROMPT_LEARNER == "conditional_learnable":
+    elif cfg.PROMPT_LEARNER == "conditional_learnable":  #the inputs/parameters might change according to conditional
         prompt_learner = ConditionalLearnablePromptExtractor(
             prompt_dim=cfg.PROMPT_DIM,
             prompt_shape=cfg.PROMPT_SHAPE,
