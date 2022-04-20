@@ -5,7 +5,7 @@ from .text_prompt import (
     PredefinedPromptExtractor,
     ImageNetPromptExtractor,
     VILDPromptExtractor,
-    LearnablePromptExtractor,
+    LearnablePromptExtractor, # add conditional learnable prompt
 )
 from .adapter import ClipAdapter, MaskFormerClipAdapter, PerPixelClipAdapter
 
@@ -17,8 +17,8 @@ def build_prompt_learner(cfg):
         prompt_learner = ImageNetPromptExtractor()
     elif cfg.PROMPT_LEARNER == "vild":
         prompt_learner = VILDPromptExtractor()
-    elif cfg.PROMPT_LEARNER == "learnable":
-        prompt_learner = LearnablePromptExtractor(
+    elif cfg.PROMPT_LEARNER == "conditional_learnable":
+        prompt_learner = ConditionalLearnablePromptExtractor(
             prompt_dim=cfg.PROMPT_DIM,
             prompt_shape=cfg.PROMPT_SHAPE,
         )
