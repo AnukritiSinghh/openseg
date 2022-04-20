@@ -168,7 +168,7 @@ class ZeroShotMaskFormer(MaskFormer):
         features = self.backbone(images.tensor)
         outputs = self.sem_seg_head(features)
         class_names = self.get_class_name_list(dataset_name)
-        text_features = self.clip_adapter.get_text_features(class_names)
+        text_features = self.clip_adapter.get_text_features(class_names) #get_text_features will have image features with this class_names
         outputs["pred_logits"] = self.clip_adapter.get_sim_logits(
             text_features, self.clip_adapter.normalize_feature(outputs["pred_logits"])
         )
