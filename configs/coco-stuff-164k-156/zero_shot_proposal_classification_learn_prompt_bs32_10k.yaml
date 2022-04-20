@@ -8,7 +8,7 @@ MODEL:
     PROMPT_LEARNER: "learnable"
     # for learnable prompt
     PROMPT_DIM: 512
-    PROMPT_SHAPE: (16, 0)
+    PROMPT_SHAPE: (32, 0)
     CLIP_MODEL_NAME: "ViT-B/16"
 DATASETS:
   TRAIN: ("coco_2017_train_stuff_base_sem_seg_classification",)
@@ -30,7 +30,7 @@ SOLVER:
   WARMUP_FACTOR: 0.005
   WARMUP_ITERS: 100
   IMS_PER_BATCH: 16
-  TEST_IMS_PER_BATCH: 2
+  TEST_IMS_PER_BATCH: 4
   MAX_ITER: 16000
   CHECKPOINT_PERIOD: 1000
 TEST:
