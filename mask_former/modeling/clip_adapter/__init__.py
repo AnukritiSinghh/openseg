@@ -5,7 +5,8 @@ from .text_prompt import (
     PredefinedPromptExtractor,
     ImageNetPromptExtractor,
     VILDPromptExtractor,
-    LearnablePromptExtractor, # add conditional learnable prompt
+    LearnablePromptExtractor, 
+    ConditionalLearnablePromptExtractor,    # add conditional learnable prompt
 )
 from .adapter import ClipAdapter, MaskFormerClipAdapter, PerPixelClipAdapter
 
