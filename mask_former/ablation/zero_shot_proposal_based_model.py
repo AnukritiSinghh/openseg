@@ -18,6 +18,7 @@ from ..modeling.clip_adapter import (
     ImageNetPromptExtractor,
     VILDPromptExtractor,
     LearnablePromptExtractor,
+    ConditionalLearnablePromptExtractor,
     build_prompt_learner,
 )
 
