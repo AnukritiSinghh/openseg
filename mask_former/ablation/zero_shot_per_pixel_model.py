@@ -20,6 +20,7 @@ from ..modeling.clip_adapter import (
     ImageNetPromptExtractor,
     VILDPromptExtractor,
     LearnablePromptExtractor,
+    ConditionalLearnablePromptExtractor
 )
 
 
