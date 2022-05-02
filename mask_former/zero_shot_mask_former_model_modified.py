@@ -47,6 +47,7 @@ class ZeroShotMaskFormer(MaskFormer):
         clip_ensemble_weight: float,
         pixel_mean: Tuple[float],
         pixel_std: Tuple[float],
+        conditionallearnable=False,
     ):
         """
         Args:
@@ -86,6 +87,7 @@ class ZeroShotMaskFormer(MaskFormer):
         )
         self.clip_adapter: ClipAdapter = clip_adapter
         self._region_clip_adapter = region_clip_adapter
+        self.conditionallearnable = conditionallearnable
 
         self.clip_ensemble: bool = clip_ensemble
         self.clip_ensemble_weight: float = clip_ensemble_weight
@@ -128,7 +130,7 @@ class ZeroShotMaskFormer(MaskFormer):
         init_kwargs[
             "clip_ensemble_weight"
         ] = cfg.MODEL.CLIP_ADAPTER.CLIP_ENSEMBLE_WEIGHT
-
+        init_kwargs["conditionallearnable"] = cfg.MODEL.CLIP_ADAPTER.PROMPT_LEARNER    #changed
         return init_kwargs
 
     def forward(self, batched_inputs):
@@ -157,6 +159,7 @@ class ZeroShotMaskFormer(MaskFormer):
                     segments_info (list[dict]): Describe each segment in `panoptic_seg`.
                         Each dict contains keys "id", "category_id", "isthing".
         """
+        print=(batched_inputs,"this is batched_inputs")
         dataset_name = [x["meta"]["dataset_name"] for x in batched_inputs]
         assert len(set(dataset_name)) == 1
         dataset_name = dataset_name[0]
@@ -165,11 +168,17 @@ class ZeroShotMaskFormer(MaskFormer):
         images = [(x - self.pixel_mean) / self.pixel_std for x in images]
         images = ImageList.from_tensors(images, self.size_divisibility)
 
-        features = self.backbone(images.tensor)
+        features = self.backbone(images.tensor)    #changed
         outputs = self.sem_seg_head(features)
         class_names = self.get_class_name_list(dataset_name)
-        text_features = self.clip_adapter.get_text_features(class_names) #get_text_features will have image features with this class_names
-        image_features = self.clip_adapter.get_image_features(image) #changed
+        
+        if self.conditionallearnable:                                             #changed
+            text_features = self.clip_adapter.get_text_features(class_names) 
+        else:
+            text_features = self.clip_adapter.get_text_features(class_names,features=None)   
+        
+        #image = self._preprocess_image(image, **kwargs)       #changed
+    
         outputs["pred_logits"] = self.clip_adapter.get_sim_logits(
             text_features, self.clip_adapter.normalize_feature(outputs["pred_logits"])
         )
@@ -283,6 +292,9 @@ class ZeroShotMaskFormer(MaskFormer):
             c.strip() for c in MetadataCatalog.get(dataset_name).stuff_classes
         ]
         return class_names
+    
+    def _preprocess_image(self, image: torch.Tensor):    #added
+        return image
 
     @property
     def region_clip_adapter(self):
