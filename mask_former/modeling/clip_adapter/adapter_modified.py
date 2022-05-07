@@ -82,8 +82,8 @@ class ClipAdapter(nn.Module):
         image_features: torch.Tensor,
         temperature: float = 100,
     ):
-        text_features = text_features.permute(0, 2, 1)
-        return temperature * image_features @ text_features
+        #text_features = text_features.permute(0, 2, 1)
+        return temperature * image_features @ text_features.T
 
     def normalize_feature(self, feat: torch.Tensor):
         return feat / feat.norm(dim=-1, keepdim=True)
@@ -200,8 +200,8 @@ class MaskFormerClipAdapter(ClipAdapter):
             self.non_object_embedding
             / self.non_object_embedding.norm(dim=-1, keepdim=True)
         )
-        non_object_text_features = non_object_text_features.repeat(batch_size,1,1)
-        return torch.cat([object_text_features, non_object_text_features], dim=1)
+        #non_object_text_features = non_object_text_features.repeat(batch_size,1,1)
+        return torch.cat([object_text_features, non_object_text_features], dim=0)
 
 
 class PerPixelClipAdapter(ClipAdapter):
