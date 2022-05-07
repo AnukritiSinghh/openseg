@@ -268,7 +268,7 @@ class ConditionalLearnablePromptExtractor(PromptExtractor):
         #bias = self.meta_net(features)      #it should be (batch, ctx_dim) that is (24,512)
         #bias = bias.unsqueeze(1)
         #bias = torch.zeros(6,1,512)
-        bias = torch.cuda.FloatTensor(batch_size,1,512).fill_(0)
+        '''bias = torch.cuda.FloatTensor(batch_size,1,512).fill_(0)
         #print(bias.shape,"bias")
         prefix = prefix.unsqueeze(0) 
         #print(prefix.shape,"prefix")
@@ -286,14 +286,14 @@ class ConditionalLearnablePromptExtractor(PromptExtractor):
             if self.pad_signal.shape[0] != batch_size:
                 self.pad_signal = self.pad_signal[0]
                 self.pad_signal = self.pad_signal.unsqueeze(0)
-                self.pad_signal = self.pad_signal.repeat(batch_size,1,1)
+                self.pad_signal = self.pad_signal.repeat(batch_size,1,1)'''
             
         
         embeddings = torch.stack(
             [
                 torch.cat(
                     [prefix, self.noun_bucket[noun], suffix]
-                    + [self.pad_signal.expand(-1, 77 - length, -1)], dim=1,
+                    + [self.pad_signal.expand(77 - length, -1)]
                 )
                 for noun, length in zip(noun_list, lengths)
             ]
@@ -303,9 +303,9 @@ class ConditionalLearnablePromptExtractor(PromptExtractor):
         cls = len(lengths)
         indices = torch.Tensor(lengths).long().to(embeddings.device) - 1     #pointtolastwordinsent   
         
-        embeddings = embeddings.reshape(cls*batch_size, 77, 512)         #batch_size
+        #embeddings = embeddings.reshape(cls*batch_size, 77, 512)         #batch_size
         text_features = self.get_text_feature(embeddings, indices, clip_model,features)
-        text_features = text_features.reshape(batch_size,(cls*batch_size)//batch_size,512)
+        #text_features = text_features.reshape(batch_size,(cls*batch_size)//batch_size,512)
         text_features = text_features / text_features.norm(dim=-1, keepdim=True)
 
         return text_features
@@ -338,7 +338,7 @@ class ConditionalLearnablePromptExtractor(PromptExtractor):
             )
             
         
-        for noun in noun_list:
+        '''for noun in noun_list:
         
             if len(self.noun_bucket[noun].shape) == 2: 
                 self.noun_bucket[noun] = self.noun_bucket[noun].unsqueeze(0)
@@ -347,7 +347,7 @@ class ConditionalLearnablePromptExtractor(PromptExtractor):
                 if self.noun_bucket[noun].shape[0] != batch_size:
                     self.noun_bucket[noun] = self.noun_bucket[noun][0]
                     self.noun_bucket[noun] = self.noun_bucket[noun].unsqueeze(0)
-                    self.noun_bucket[noun] = self.noun_bucket[noun].repeat(batch_size,1,1)
+                    self.noun_bucket[noun] = self.noun_bucket[noun].repeat(batch_size,1,1)'''
                     
                     
                     
