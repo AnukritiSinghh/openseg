@@ -4,6 +4,32 @@ MaskFormer Training Script.
 
 This script is a simplified version of the training script in detectron2/tools.
 """
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
+
+import sys
+import torch
+from torch.utils.data import dataloader
+from torch.multiprocessing import reductions
+from multiprocessing.reduction import ForkingPickler
+
+default_collate_func = dataloader.default_collate
+
+
+def default_collate_override(batch):
+  dataloader._use_shared_memory = False
+  return default_collate_func(batch)
+
+setattr(dataloader, 'default_collate', default_collate_override)
+
+for t in torch._storage_classes:
+  if sys.version_info[0] == 2:
+    if t in ForkingPickler.dispatch:
+        del ForkingPickler.dispatch[t]
+  else:
+    if t in ForkingPickler._extra_reducers:
+        del ForkingPickler._extra_reducers[t]
+
 from functools import partial
 import copy
 import itertools
