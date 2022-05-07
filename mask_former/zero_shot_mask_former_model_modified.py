@@ -159,7 +159,7 @@ class ZeroShotMaskFormer(MaskFormer):
                     segments_info (list[dict]): Describe each segment in `panoptic_seg`.
                         Each dict contains keys "id", "category_id", "isthing".
         """
-        print=(batched_inputs,"this is batched_inputs")
+        
         dataset_name = [x["meta"]["dataset_name"] for x in batched_inputs]
         assert len(set(dataset_name)) == 1
         dataset_name = dataset_name[0]
@@ -172,12 +172,15 @@ class ZeroShotMaskFormer(MaskFormer):
         outputs = self.sem_seg_head(features)
         class_names = self.get_class_name_list(dataset_name)
         
-        if self.conditionallearnable:                                             #changed
-            text_features = self.clip_adapter.get_text_features(class_names) 
-        else:
-            text_features = self.clip_adapter.get_text_features(class_names,features=None)   
         
-        #image = self._preprocess_image(image, **kwargs)       #changed
+        if self.conditionallearnable:                                             
+            text_features = self.clip_adapter.get_text_features(class_names,features) 
+            
+        else:
+            text_features = self.clip_adapter.get_text_features(class_names,features=None) 
+            
+        
+        
     
         outputs["pred_logits"] = self.clip_adapter.get_sim_logits(
             text_features, self.clip_adapter.normalize_feature(outputs["pred_logits"])
