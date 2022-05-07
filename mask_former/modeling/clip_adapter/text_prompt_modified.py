@@ -366,7 +366,7 @@ class ConditionalLearnablePromptExtractor(PromptExtractor):
         x = clip_model.transformer(x)
         x = x.permute(1, 0, 2)  # LND -> NLD                                   
         x = clip_model.ln_final(x).type(clip_model.dtype)
-        indices = indices.repeat(batch_size)    #batch_size
+        #indices = indices.repeat(batch_size)    #batch_size
         x = x[torch.arange(x.shape[0]), indices] @ clip_model.text_projection  #imp
         return x
      
