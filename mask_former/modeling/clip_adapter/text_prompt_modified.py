@@ -243,20 +243,21 @@ class ConditionalLearnablePromptExtractor(PromptExtractor):
         
  
         #features = features.get("res4")     #24,1024 after avgpool2d is needed
-        #print(features.shape[0], "shape of features")
+        #print(features.shape, "shape of features")
         batch_size=features.shape[0]
         #print(batch_size,"batch_size")
         #exit()
-        m = torch.nn.AvgPool2d(40, 40)
+        m = torch.nn.AvgPool2d((features.shape[2], features.shape[3]))
         features = m(features)
-        #print(features, "FEATURES")
-        features = features.squeeze()
-        #print(features.shape, "FEATURES")           #torch.Size([24, 1024, 40, 40])
-        
+        #print(features.shape, "shape of features after avgpool")
+        features = torch.squeeze(features,3)
+        #print(features.shape, "shape of features after squeeze")           #torch.Size([24, 1024, 40, 40])
+        features = torch.squeeze(features,2)
+        #print(features.shape, "shape of features after again squeeze")
         #exit()
             
-        bias = self.meta_net(features)      #it should be (batch, ctx_dim) that is (24,512)
-        bias = bias.unsqueeze(1)
+        #bias = self.meta_net(features)      #it should be (batch, ctx_dim) that is (24,512)
+        #bias = bias.unsqueeze(1)
         #print(bias.shape,"THIS IS BIAS")
         #exit()
         
@@ -279,20 +280,22 @@ class ConditionalLearnablePromptExtractor(PromptExtractor):
          
         #print(len(lengths),"hmmm")     #lengths is 156
         #for noun in noun_list:
-            #print(type(self.noun_bucket[noun]),"")
+            #print(self.noun_bucket[noun].shape,"noun bucket")
+        #    print(noun_list,"noun list")
         #exit()
         #unsqueeze and torch repeat for concat in noun
-        
+        #print(features.shape,"features")
         bias = self.meta_net(features)      #it should be (batch, ctx_dim) that is (24,512)
+        #print(bias.shape,"THIS IS BIAS")
         bias = bias.unsqueeze(1)
-        print(bias.shape,"THIS IS BIAS")
+        #print(bias.shape,"THIS IS BIAS AFTER UNSQUEEZE")
         #exit()
-        print(prefix.shape, "prefix")
+        #print(prefix.shape, "prefix")
         prefix = prefix.unsqueeze(0) 
-        print(prefix.shape,"prefix after unsqueeze")
+        #print(prefix.shape,"prefix after unsqueeze")
         suffix = suffix.unsqueeze(0)
         prefix = prefix + bias # like a shifted ctx
-        print(prefix.shape,"prefix after bias")
+        #print(prefix.shape,"prefix after bias")
         #exit()
         suffix = suffix + bias
         
@@ -300,18 +303,31 @@ class ConditionalLearnablePromptExtractor(PromptExtractor):
         #exit()
         
         
-        
+        #print(self.pad_signal.shape, "PAD_SIGNAL SHAPE WITHOUT IF LOOP")
         
         #exit()   
         if len(self.pad_signal.shape) == 2:
                 
             self.pad_signal = self.pad_signal.unsqueeze(0)
             self.pad_signal = self.pad_signal.repeat(batch_size,1,1)       #batch size
-        #print(self.pad_signal.shape, "PAD_SIGNAL SHAPE")
+            #print(self.pad_signal.shape, "PAD_SIGNAL SHAPE IN IF LOOP")
+        elif len(self.pad_signal.shape) == 3:    
+                #print("here in elif pad_signal")
+                if self.pad_signal.shape[0] != batch_size:
+                    self.pad_signal = self.pad_signal[0]
+                    self.pad_signal = self.pad_signal.unsqueeze(0)
+                    self.pad_signal = self.pad_signal.repeat(batch_size,1,1)
+                    #print(self.pad_signal.shape,"self.pad_signal")
+            
+            
+            
+        #print(self.pad_signal.shape, "PAD_SIGNAL SHAPE AFTER IF LOOP")
         #for length in lengths:
         #    print(self.pad_signal.expand(-1, 77 - length, -1).shape,"EXPAND")
         #exit()
-          
+        
+        
+        
         embeddings = torch.stack(
             [
                 torch.cat(
@@ -381,11 +397,25 @@ class ConditionalLearnablePromptExtractor(PromptExtractor):
             #for embedding in text_embeddings:
             #    print(embedding.shape,"embedding")
             #    exit()
-            for noun in left_class_names:
+        for noun in noun_list:
         #    print(noun)
-             self.noun_bucket[noun] = self.noun_bucket[noun].unsqueeze(0)
-             self.noun_bucket[noun] = self.noun_bucket[noun].repeat(batch_size,1,1) 
-                
+            if len(self.noun_bucket[noun].shape) == 2: 
+                self.noun_bucket[noun] = self.noun_bucket[noun].unsqueeze(0)
+                self.noun_bucket[noun] = self.noun_bucket[noun].repeat(batch_size,1,1) 
+            elif len(self.noun_bucket[noun].shape) == 3:    
+                #print("here in elif")
+                if self.noun_bucket[noun].shape[0] != batch_size:
+                    self.noun_bucket[noun] = self.noun_bucket[noun][0]
+                    self.noun_bucket[noun] = self.noun_bucket[noun].unsqueeze(0)
+                    self.noun_bucket[noun] = self.noun_bucket[noun].repeat(batch_size,1,1)
+                    #print(self.noun_bucket[noun].shape,"self.noun_bucket[noun]")
+                    
+                    
+              
+    
+    
+    
+    
     #batch size, 
     #emb.reshape(b*n,l,d)
     @staticmethod
