@@ -22,8 +22,6 @@ class ClipAdapter(nn.Module):
         #images = [x["image"].to(self.device) for x in batched_inputs]    #changed21to25 and arguements
         #images = [(x - self.pixel_mean) / self.pixel_std for x in images]
         #images = ImageList.from_tensors(images, self.size_divisibility)
-
-        #features = self.backbone(image.tensor)
         image_features = self.get_image_features(image)
         return self.get_sim_logits(text_feature, image_features)
 
@@ -31,14 +29,25 @@ class ClipAdapter(nn.Module):
         return image
 
     def _get_text_features(self, noun_list: List[str], features=None):
-        if not self.prompt_learner.with_trainable_params:
+        if self.prompt_learner.with_conditional_trainable_params:
+            text_features = self.prompt_learner(noun_list, self.clip_model, features)
+            self.text_feature_buffer.update(
+                {
+                    noun: text_feature.detach()
+                    for noun, text_feature in zip(noun_list, text_features)
+                }
+            )
+            return text_features
+        
+        
+        '''if not self.prompt_learner.with_trainable_params:
 
             left_noun_list = [
                 noun for noun in noun_list if noun not in self.text_feature_buffer
             ]
             if len(left_noun_list) > 0:
                 left_text_features = self.prompt_learner(
-                    left_noun_list, self.clip_model
+                    left_noun_list, self.clip_model,
                 )
                 self.text_feature_buffer.update(
                     {
@@ -48,19 +57,19 @@ class ClipAdapter(nn.Module):
                         )
                     }
                 )
-            return torch.stack([self.text_feature_buffer[noun] for noun in noun_list])
-        else:
-            text_features = self.prompt_learner(noun_list, self.clip_model,features=None)
+            return torch.stack([self.text_feature_buffer[noun] for noun in noun_list])'''
+        '''else:
+            text_features = self.prompt_learner(noun_list, self.clip_model, features=None)
             self.text_feature_buffer.update(
                 {
                     noun: text_feature.detach()
                     for noun, text_feature in zip(noun_list, text_features)
                 }
             )
-            return text_features
+            return text_features'''
 
-    def get_text_features(self, noun_list: List[str], features=None):
-        return self._get_text_features(noun_list, features=None)
+    def get_text_features(self, noun_list: List[str], features):
+        return self._get_text_features(noun_list, features)
 
     def get_image_features(self, image: torch.Tensor):
         image_features = self.clip_model.visual(image)
@@ -73,7 +82,8 @@ class ClipAdapter(nn.Module):
         image_features: torch.Tensor,
         temperature: float = 100,
     ):
-        return temperature * image_features @ text_features.T
+        text_features = text_features.permute(0, 2, 1)
+        return temperature * image_features @ text_features
 
     def normalize_feature(self, feat: torch.Tensor):
         return feat / feat.norm(dim=-1, keepdim=True)
@@ -83,7 +93,6 @@ class MaskFormerClipAdapter(ClipAdapter):
     def __init__(
         self,
         clip_model_name: str,
-        backbone: Backbone,      #changed
         prompt_learner: PromptExtractor,
         mask_fill: str = "mean",
         mask_expand_ratio: float = 1.0,
@@ -91,7 +100,7 @@ class MaskFormerClipAdapter(ClipAdapter):
         mask_matting: bool = False,
         region_resized: bool = True,
     ):
-        super().__init__(clip_model_name, prompt_learner, backbone=backbone)
+        super().__init__(clip_model_name, prompt_learner)
         self.non_object_embedding = nn.Parameter(
             torch.empty(1, self.clip_model.text_projection.shape[-1])
         )
@@ -137,7 +146,7 @@ class MaskFormerClipAdapter(ClipAdapter):
             )
         else:
             image_features = self.get_image_features(image)
-        features = self.backbone(image.tensor)              #changed
+        #features = self.backbone(image.tensor)              #changed
         text_feature = self.get_text_features(text)  # k,feat_dim
         return self.get_sim_logits(text_feature, image_features), valid_flag
 
@@ -184,12 +193,15 @@ class MaskFormerClipAdapter(ClipAdapter):
         return regions, valid
 
     def get_text_features(self, noun_list: List[str], features=None):       #changed
-        object_text_features = self._get_text_features(noun_list, features=None)   #changed
+        features = features.get("res4")     #24,1024 after avgpool2d is needed
+        batch_size=features.shape[0]
+        object_text_features = self._get_text_features(noun_list, features)   
         non_object_text_features = (
             self.non_object_embedding
             / self.non_object_embedding.norm(dim=-1, keepdim=True)
         )
-        return torch.cat([object_text_features, non_object_text_features], dim=0)
+        non_object_text_features = non_object_text_features.repeat(batch_size,1,1)
+        return torch.cat([object_text_features, non_object_text_features], dim=1)
 
 
 class PerPixelClipAdapter(ClipAdapter):
