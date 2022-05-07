@@ -7,17 +7,25 @@ MODEL:
     EMBEDDING_DIM: 512
     EMBED_LAYERS: 2
   CLIP_ADAPTER:
-    PROMPT_LEARNER: "learnable"
+    PROMPT_LEARNER: "conditionallearnable"
+    #PROMPT_LEARNER: "learnable"
+    #PROMPT_LEARNER: "is_conditional"
     # for learnable prompt
     PROMPT_DIM: 512
-    PROMPT_SHAPE: (16, 0)
+    PROMPT_SHAPE: (32, 0)
     CLIP_MODEL_NAME: "ViT-B/16"
     MASK_FILL: "mean"
     MASK_EXPAND_RATIO: 1.0
     MASK_THR: 0.5
     MASK_MATTING: False
     REGION_RESIZED: True
-    CLIP_ENSEMBLE: True
+    CLIP_ENSEMBLE: False
     CLIP_ENSEMBLE_WEIGHT: 0.8
+    #PREC: "fp16"
 DATASETS:
   TRAIN: ("coco_2017_train_stuff_base_sem_seg",)
+#TRAINER:
+#  COCOOP:
+    #N_CTX: 8
+    #CTX_INIT: ""
+#    PREC: "fp16"
