@@ -260,7 +260,7 @@ class ConditionalLearnablePromptExtractor(PromptExtractor):
        
         
         lengths = [
-            len(prefix) + len(suffix) + self.noun_bucket[noun].shape[1]
+            len(prefix) + len(suffix) + len(self.noun_bucket[noun])
             for noun in noun_list
         ]
          
