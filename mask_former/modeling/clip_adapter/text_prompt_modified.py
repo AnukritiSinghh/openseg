@@ -203,10 +203,6 @@ class ConditionalLearnablePromptExtractor(PromptExtractor):
             ("linear2", nn.Linear(prompt_dim // 16, prompt_dim))
         ]))
         
-        print(type(self.meta_net), "META_NET")       #<class 'torch.nn.modules.container.Sequential'>
-        
-        
-        
         #if cfg.MODEL.CLIP_ADAPTER.PREC == "fp16":    # change the cgf file location  # CLIP's default precision is fp16
         #    self.meta_net.half()
 
@@ -245,7 +241,7 @@ class ConditionalLearnablePromptExtractor(PromptExtractor):
         features = m(features)
         features = torch.squeeze(features,3)
         features = torch.squeeze(features,2)
-            
+    
         
         prefix = [self.start_signal]
         if self.prefix_prompt is not None:
@@ -260,40 +256,35 @@ class ConditionalLearnablePromptExtractor(PromptExtractor):
        
         
         lengths = [
-            len(prefix) + len(suffix) + len(self.noun_bucket[noun])
+            len(prefix) + len(suffix) + self.noun_bucket[noun].shape[1]
             for noun in noun_list
         ]
          
-      
+        
         #bias = self.meta_net(features)      #it should be (batch, ctx_dim) that is (24,512)
         #bias = bias.unsqueeze(1)
-        #bias = torch.zeros(6,1,512)
-        '''bias = torch.cuda.FloatTensor(batch_size,1,512).fill_(0)
-        #print(bias.shape,"bias")
+        bias = torch.cuda.FloatTensor(batch_size,1,512).fill_(0)
         prefix = prefix.unsqueeze(0) 
-        #print(prefix.shape,"prefix")
-        #exit()
         suffix = suffix.unsqueeze(0)
         prefix = prefix + bias # like a shifted ctx
         suffix = suffix + bias
         
-        
+         
         if len(self.pad_signal.shape) == 2:
             self.pad_signal = self.pad_signal.unsqueeze(0)
-            self.pad_signal = self.pad_signal.repeat(batch_size,1,1)       
-            
+            self.pad_signal = self.pad_signal.repeat(batch_size,1,1)       #batch size
         elif len(self.pad_signal.shape) == 3:    
             if self.pad_signal.shape[0] != batch_size:
                 self.pad_signal = self.pad_signal[0]
                 self.pad_signal = self.pad_signal.unsqueeze(0)
-                self.pad_signal = self.pad_signal.repeat(batch_size,1,1)'''
+                self.pad_signal = self.pad_signal.repeat(batch_size,1,1)
+                   
             
-        
         embeddings = torch.stack(
             [
                 torch.cat(
                     [prefix, self.noun_bucket[noun], suffix]
-                    + [self.pad_signal.expand(77 - length, -1)]
+                    + [self.pad_signal.expand(-1, 77 - length, -1)], dim=1,
                 )
                 for noun, length in zip(noun_list, lengths)
             ]
@@ -301,11 +292,14 @@ class ConditionalLearnablePromptExtractor(PromptExtractor):
         
         
         cls = len(lengths)
-        indices = torch.Tensor(lengths).long().to(embeddings.device) - 1     #pointtolastwordinsent   
-        
-        #embeddings = embeddings.reshape(cls*batch_size, 77, 512)         #batch_size
+        indices = torch.Tensor(lengths).long().to(embeddings.device) - 1     #pointtolastwordinsent   #indices.repeat(batch_size)
+        #indices = indices.repeat(batch_size)
+        #print(indices,"INDICES")
+        #print(indices.shape,"shape of indices")
+        #exit()
+        embeddings = embeddings.reshape(cls*batch_size, 77, 512)         #batch_size
         text_features = self.get_text_feature(embeddings, indices, clip_model,features)
-        #text_features = text_features.reshape(batch_size,(cls*batch_size)//batch_size,512)
+        text_features = text_features.reshape(batch_size,(cls*batch_size)//batch_size,512)
         text_features = text_features / text_features.norm(dim=-1, keepdim=True)
 
         return text_features
@@ -337,17 +331,18 @@ class ConditionalLearnablePromptExtractor(PromptExtractor):
              
             )
             
-        
-        '''for noun in noun_list:
+            
+        for noun in noun_list:
         
             if len(self.noun_bucket[noun].shape) == 2: 
                 self.noun_bucket[noun] = self.noun_bucket[noun].unsqueeze(0)
                 self.noun_bucket[noun] = self.noun_bucket[noun].repeat(batch_size,1,1) 
             elif len(self.noun_bucket[noun].shape) == 3:    
+                
                 if self.noun_bucket[noun].shape[0] != batch_size:
                     self.noun_bucket[noun] = self.noun_bucket[noun][0]
                     self.noun_bucket[noun] = self.noun_bucket[noun].unsqueeze(0)
-                    self.noun_bucket[noun] = self.noun_bucket[noun].repeat(batch_size,1,1)'''
+                    self.noun_bucket[noun] = self.noun_bucket[noun].repeat(batch_size,1,1)
                     
                     
                     
@@ -364,9 +359,10 @@ class ConditionalLearnablePromptExtractor(PromptExtractor):
         x = x + clip_model.positional_embedding.type(clip_model.dtype)
         x = x.permute(1, 0, 2)  # NLD -> LND
         x = clip_model.transformer(x)
-        x = x.permute(1, 0, 2)  # LND -> NLD                                   
+        x = x.permute(1, 0, 2)  # LND -> NLD
         x = clip_model.ln_final(x).type(clip_model.dtype)
-        #indices = indices.repeat(batch_size)    #batch_size
+        # take features from the eot embedding (eot_token is the highest number in each sequence)
+        indices = indices.repeat(batch_size)    #batch_size
         x = x[torch.arange(x.shape[0]), indices] @ clip_model.text_projection  #imp
         return x
      
