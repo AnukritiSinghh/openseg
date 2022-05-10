@@ -18,11 +18,12 @@ class ClipAdapter(nn.Module):
 
     def forward(self, image: torch.Tensor, text: List[str], **kwargs):
         image = self._preprocess_image(image, **kwargs)
-        text_feature = self.get_text_features(text)  # k,feat_dim
-        #images = [x["image"].to(self.device) for x in batched_inputs]    #changed21to25 and arguements
-        #images = [(x - self.pixel_mean) / self.pixel_std for x in images]
-        #images = ImageList.from_tensors(images, self.size_divisibility)
         image_features = self.get_image_features(image)
+        #print(image_features.shape,"image_features")
+        image_features_ = image_features.unsqueeze(2)
+        image_features_ = image_features_.unsqueeze(3)
+        #print(image_features_.shape,"image_features_")
+        text_feature = self.get_text_features(text,image_features_)  # k,feat_dim
         return self.get_sim_logits(text_feature, image_features)
 
     def _preprocess_image(self, image: torch.Tensor):
@@ -82,8 +83,12 @@ class ClipAdapter(nn.Module):
         image_features: torch.Tensor,
         temperature: float = 100,
     ):
-        #text_features = text_features.permute(0, 2, 1)
-        return temperature * image_features @ text_features.T
+        text_features = text_features.permute(0, 2, 1)
+        #print(image_features,"image_features")
+        #print(text_features,"text_features")
+        #print((temperature * image_features @ text_features).shape, "get_sim_logits")
+        #exit()
+        return temperature * image_features @ text_features
 
     def normalize_feature(self, feat: torch.Tensor):
         return feat / feat.norm(dim=-1, keepdim=True)
@@ -136,6 +141,7 @@ class MaskFormerClipAdapter(ClipAdapter):
         text: List[str],
         mask: torch.Tensor,
         normalize: bool = True,
+        features = None,
     ):
         image, valid_flag = self._preprocess_image(image, mask, normalize=normalize)
         if image is None:
@@ -146,8 +152,7 @@ class MaskFormerClipAdapter(ClipAdapter):
             )
         else:
             image_features = self.get_image_features(image)
-        #features = self.backbone(image.tensor)              #changed
-        text_feature = self.get_text_features(text)  # k,feat_dim
+        text_feature = self.get_text_features(text,features)  # k,feat_dim
         return self.get_sim_logits(text_feature, image_features), valid_flag
 
     def _preprocess_image(
@@ -200,8 +205,8 @@ class MaskFormerClipAdapter(ClipAdapter):
             self.non_object_embedding
             / self.non_object_embedding.norm(dim=-1, keepdim=True)
         )
-        #non_object_text_features = non_object_text_features.repeat(batch_size,1,1)
-        return torch.cat([object_text_features, non_object_text_features], dim=0)
+        non_object_text_features = non_object_text_features.repeat(batch_size,1,1)
+        return torch.cat([object_text_features, non_object_text_features], dim=1)
 
 
 class PerPixelClipAdapter(ClipAdapter):
