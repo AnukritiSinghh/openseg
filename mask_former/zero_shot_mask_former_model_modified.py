@@ -237,7 +237,7 @@ class ZeroShotMaskFormer(MaskFormer):
                 image = input_per_image["image"].to(self.device)
                 # semantic segmentation inference
                 r = self.semantic_inference(
-                    mask_cls_result, mask_pred_result, image, class_names, dataset_name
+                    mask_cls_result, mask_pred_result, image, class_names, dataset_name, features
                 )
                 height = input_per_image.get("height", image_size[0])
                 width = input_per_image.get("width", image_size[1])
@@ -253,20 +253,26 @@ class ZeroShotMaskFormer(MaskFormer):
 
             return processed_results
 
-    def semantic_inference(self, mask_cls, mask_pred, image, class_names, dataset_name):
+    def semantic_inference(self, mask_cls, mask_pred, image, class_names, dataset_name, features):
         mask_cls = F.softmax(mask_cls, dim=-1)[..., :-1]
         mask_pred = mask_pred.sigmoid()
         # get the classification result from clip model
+        #print(image.shape,"image")
         if self.clip_ensemble:
             clip_cls, valid_flag = self.region_clip_adapter(
-                image, class_names, mask_pred, normalize=True
+                image, class_names, mask_pred, normalize=True, features=features,
             )
+            clip_cls = clip_cls[0]
             if clip_cls is None:
                 clip_cls = torch.empty(0, mask_cls.shape[-1] + 1, device=self.device)
             # softmax before index or after?
+            #print(clip_cls.shape,"clip_cls1") 
             clip_cls = F.softmax(clip_cls[:, :-1], dim=-1)
             if self.clip_ensemble_weight > 0:
                 map_back_clip_cls = mask_cls.new_ones(mask_cls.shape)
+                #print(map_back_clip_cls.shape,"map_back_clip_cls")
+                #print(clip_cls.shape,"clip_cls2")
+                #print(len(valid_flag),"valid_flag")
                 map_back_clip_cls[valid_flag] = clip_cls
                 if hasattr(MetadataCatalog.get(dataset_name), "trainable_flag"):
                     trained_mask = torch.Tensor(
