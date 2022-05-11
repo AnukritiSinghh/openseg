@@ -75,6 +75,7 @@ class ClipAdapter(nn.Module):
     def get_image_features(self, image: torch.Tensor):
         image_features = self.clip_model.visual(image)
         image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+        #print(image_features.shape,"image_features inside image_feat")
         return image_features
 
     def get_sim_logits(
@@ -83,12 +84,19 @@ class ClipAdapter(nn.Module):
         image_features: torch.Tensor,
         temperature: float = 100,
     ):
-        text_features = text_features.permute(0, 2, 1)
-        #print(image_features,"image_features")
-        #print(text_features,"text_features")
-        #print((temperature * image_features @ text_features).shape, "get_sim_logits")
+        #print(text_features.shape,"text_features inside sim_logits before permute")
+        #text_features = text_features.permute(0, 2, 1)
+        #image_features = image_features.permute(1,0)
+        #print(image_features.shape,"image_features")
+        #image_features = temperature * image_features
+        #print(image_features.shape)
+        a = torch.einsum('bi,bji->bj', image_features, text_features)
+        #print(a.shape,"a")
+        #print(text_features.shape,"text_features inside sim_logits")
+        #print((temperature * text_features @ image_features.T).shape, "get_sim_logits")
         #exit()
-        return temperature * image_features @ text_features
+        #return temperature * image_features @ text_features
+        return a
 
     def normalize_feature(self, feat: torch.Tensor):
         return feat / feat.norm(dim=-1, keepdim=True)
