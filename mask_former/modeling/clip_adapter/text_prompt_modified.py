@@ -198,7 +198,7 @@ class ConditionalLearnablePromptExtractor(PromptExtractor):
         
         
         self.meta_net = nn.Sequential(OrderedDict([
-            ("linear1", nn.Linear(1024, prompt_dim // 16)),   #channelsize=1024
+            ("linear1", nn.Linear(512, prompt_dim // 16)),   #channelsize=1024
             ("relu", nn.ReLU(inplace=True)),
             ("linear2", nn.Linear(prompt_dim // 16, prompt_dim))
         ]))
@@ -261,9 +261,9 @@ class ConditionalLearnablePromptExtractor(PromptExtractor):
         ]
          
         
-        #bias = self.meta_net(features)      #it should be (batch, ctx_dim) that is (24,512)
-        #bias = bias.unsqueeze(1)
-        bias = torch.cuda.FloatTensor(batch_size,1,512).fill_(0)
+        bias = self.meta_net(features)      #it should be (batch, ctx_dim) that is (24,512)
+        bias = bias.unsqueeze(1)
+        #bias = torch.cuda.FloatTensor(batch_size,1,512).fill_(0)
         prefix = prefix.unsqueeze(0) 
         suffix = suffix.unsqueeze(0)
         prefix = prefix + bias # like a shifted ctx
@@ -293,7 +293,7 @@ class ConditionalLearnablePromptExtractor(PromptExtractor):
         
         cls = len(lengths)
         indices = torch.Tensor(lengths).long().to(embeddings.device) - 1     #pointtolastwordinsent   #indices.repeat(batch_size)
-        #indices = indices.repeat(batch_size)
+        indices = indices.repeat(batch_size)
         #print(indices,"INDICES")
         #print(indices.shape,"shape of indices")
         #exit()
@@ -358,13 +358,17 @@ class ConditionalLearnablePromptExtractor(PromptExtractor):
         batch_size=features.shape[0]
         x = x + clip_model.positional_embedding.type(clip_model.dtype)
         x = x.permute(1, 0, 2)  # NLD -> LND
-        x = clip_model.transformer(x)
-        x = x.permute(1, 0, 2)  # LND -> NLD
-        x = clip_model.ln_final(x).type(clip_model.dtype)
+        y = torch.zeros_like(x).to(x.device) 
+        for k in range(0,batch_size,156):
+            #s = x[k*156:(k+1)*156]
+            y[:,k*156:(k+1)*156] = clip_model.transformer(x[:,k*156:(k+1)*156])
+        y = y.permute(1, 0, 2)  # LND -> NLD
+        y = clip_model.ln_final(y).type(clip_model.dtype)
         # take features from the eot embedding (eot_token is the highest number in each sequence)
-        indices = indices.repeat(batch_size)    #batch_size
-        x = x[torch.arange(x.shape[0]), indices] @ clip_model.text_projection  #imp
-        return x
+        #indices = indices.repeat(batch_size)    #batch_size
+        y = y[torch.arange(y.shape[0]), indices] @ clip_model.text_projection  #imp
+        return y
+       
      
     @property
     def n_prefix(self):
