@@ -88,7 +88,7 @@ class ClipAdapter(nn.Module):
         #text_features = text_features.permute(0, 2, 1)
         #image_features = image_features.permute(1,0)
         #print(image_features.shape,"image_features")
-        #image_features = temperature * image_features
+        image_features = temperature * image_features
         #print(image_features.shape)
         a = torch.einsum('bi,bji->bj', image_features, text_features)   #used when training prompts
         #print(a.shape,"a")
