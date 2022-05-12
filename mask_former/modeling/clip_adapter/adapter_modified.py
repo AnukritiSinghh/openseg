@@ -90,7 +90,7 @@ class ClipAdapter(nn.Module):
         #print(image_features.shape,"image_features")
         #image_features = temperature * image_features
         #print(image_features.shape)
-        a = torch.einsum('bi,bji->bj', image_features, text_features)
+        a = torch.einsum('bi,bji->bj', image_features, text_features)   #used when training prompts
         #print(a.shape,"a")
         #print(text_features.shape,"text_features inside sim_logits")
         #print((temperature * text_features @ image_features.T).shape, "get_sim_logits")
