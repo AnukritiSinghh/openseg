@@ -198,7 +198,7 @@ class ConditionalLearnablePromptExtractor(PromptExtractor):
         
         
         self.meta_net = nn.Sequential(OrderedDict([
-            ("linear1", nn.Linear(512, prompt_dim // 16)),   #channelsize=1024
+            ("linear1", nn.Linear(512, prompt_dim // 16)),   #channelsize=1024 for segm model
             ("relu", nn.ReLU(inplace=True)),
             ("linear2", nn.Linear(prompt_dim // 16, prompt_dim))
         ]))
