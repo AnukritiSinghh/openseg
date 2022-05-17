@@ -32,6 +32,7 @@ class VisualizationDemo(object):
         self.parallel = parallel
         if parallel:
             num_gpu = torch.cuda.device_count()
+            print(num_gpu, "gpus are")
             self.predictor = AsyncPredictor(cfg, num_gpus=num_gpu)
         else:
             self.predictor = DefaultPredictor(cfg)
@@ -45,6 +46,7 @@ class VisualizationDemo(object):
             predictions (dict): the output of the model.
             vis_output (VisImage): the visualized image output.
         """
+        print(image,"this is image")
         vis_output = None
         predictions = self.predictor(image)
         # Convert image from OpenCV BGR format to Matplotlib RGB format.
@@ -153,6 +155,8 @@ class AsyncPredictor:
                 if isinstance(task, AsyncPredictor._StopToken):
                     break
                 idx, data = task
+                print(data, "this is data")
+                print(predictor(data))
                 result = predictor(data)
                 self.result_queue.put((idx, result))
 
