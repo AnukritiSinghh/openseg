@@ -1,44 +1,64 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
-# Modified by Bowen Cheng from: https://github.com/facebookresearch/detectron2/blob/master/demo/demo.py
 import argparse
 import glob
 import multiprocessing as mp
+import numpy as np
 import os
-
-# fmt: off
-import sys
-sys.path.insert(1, os.path.join(sys.path[0], '..'))
-# fmt: on
-
 import tempfile
 import time
 import warnings
-
 import cv2
-import numpy as np
 import tqdm
 
 from detectron2.config import get_cfg
 from detectron2.data.detection_utils import read_image
-from detectron2.projects.deeplab import add_deeplab_config
 from detectron2.utils.logger import setup_logger
+from detectron2.projects.deeplab import add_deeplab_config, build_lr_scheduler
+# MaskFormer
+from mask_former import SemanticSegmentorWithTTA, add_mask_former_config
+from mask_former.data import (
+    MaskFormerSemanticDatasetMapper,
+    OracleDatasetMapper,
+    MaskFormerBinarySemanticDatasetMapper,
+    ProposalClasificationDatasetMapper,
+)
 
-from mask_former import add_mask_former_config
+from mask_former.data import (
+    build_detection_test_loader,
+    build_detection_train_loader,
+    dataset_sample_per_class,
+)
+from mask_former.evaluation import (
+    GeneralizedSemSegEvaluator,
+    GeneralizedPseudoSemSegEvaluator,
+    ClassificationEvaluator,
+)
+from mask_former.utils.events import WandbWriter, setup_wandb
+from mask_former.utils.post_process_utils import dense_crf_post_process
+
 from predictor import VisualizationDemo
 
-
 # constants
-WINDOW_NAME = "MaskFormer demo"
+WINDOW_NAME = "COCO segm"
 
 
 def setup_cfg(args):
     # load config from file and command-line arguments
     cfg = get_cfg()
+    # To use demo for Panoptic-DeepLab, please uncomment the following two lines.
+    # from detectron2.projects.panoptic_deeplab import add_panoptic_deeplab_config  # noqa
+    # add_panoptic_deeplab_config(cfg)
     add_deeplab_config(cfg)
     add_mask_former_config(cfg)
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
+  
+    # Set score_threshold for builtin models
+    #cfg.MODEL.RETINANET.SCORE_THRESH_TEST = args.confidence_threshold
+    #cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = args.confidence_threshold
+    #cfg.MODEL.PANOPTIC_FPN.COMBINE.INSTANCES_CONFIDENCE_THRESH = args.confidence_threshold
     cfg.freeze()
+    #default_setup(cfg, args)
     return cfg
 
 
@@ -46,7 +66,7 @@ def get_parser():
     parser = argparse.ArgumentParser(description="Detectron2 demo for builtin configs")
     parser.add_argument(
         "--config-file",
-        default="zsseg.baseline/configs/coco-stuff-164k-156/zero_shot_maskformer_R101c_single_prompt_bs32_60k.yaml",
+        default="./configs/coco-stuff-164k-156/zero_shot_maskformer_R101c_single_prompt_bs32_60k.yaml",
         metavar="FILE",
         help="path to config file",
     )
@@ -73,7 +93,7 @@ def get_parser():
     parser.add_argument(
         "--opts",
         help="Modify config options using the command-line 'KEY VALUE' pairs",
-        default="zsseg.baseline/output/model_0059999.pth",
+        default="",
         nargs=argparse.REMAINDER,
     )
     return parser
@@ -104,6 +124,7 @@ if __name__ == "__main__":
     logger.info("Arguments: " + str(args))
 
     cfg = setup_cfg(args)
+    print(cfg)
 
     demo = VisualizationDemo(cfg)
 
