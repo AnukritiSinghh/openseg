@@ -198,7 +198,7 @@ class ConditionalLearnablePromptExtractor(PromptExtractor):
         
         
         self.meta_net = nn.Sequential(OrderedDict([
-            ("linear1", nn.Linear(512, prompt_dim // 16)),   #channelsize=1024 for segm model
+            ("linear1", nn.Linear(1024, prompt_dim // 16)),   #channelsize=1024
             ("relu", nn.ReLU(inplace=True)),
             ("linear2", nn.Linear(prompt_dim // 16, prompt_dim))
         ]))
@@ -216,6 +216,8 @@ class ConditionalLearnablePromptExtractor(PromptExtractor):
     def init_buffer(self, clip_model):
         sentence = "X."
         prompt = clip.tokenize(sentence)
+        #print(prompt.shape,"prompt")
+        #exit()
         with torch.no_grad():
             embedding = clip_model.token_embedding(prompt).type(
                 clip_model.dtype
@@ -237,6 +239,7 @@ class ConditionalLearnablePromptExtractor(PromptExtractor):
         
  
         batch_size=features.shape[0]
+        # batch_size = 1
         m = torch.nn.AvgPool2d((features.shape[2], features.shape[3]))
         features = m(features)
         features = torch.squeeze(features,3)
@@ -258,17 +261,18 @@ class ConditionalLearnablePromptExtractor(PromptExtractor):
         lengths = [
             len(prefix) + len(suffix) + self.noun_bucket[noun].shape[1]
             for noun in noun_list
-        ]
+        ]   # 512
          
-        
+       
         bias = self.meta_net(features)      #it should be (batch, ctx_dim) that is (24,512)
+        # print(bias.shape)
         bias = bias.unsqueeze(1)
-        #bias = torch.cuda.FloatTensor(batch_size,1,512).fill_(0)
+        # bias = torch.cuda.FloatTensor(batch_size,1,512).fill_(0)
         prefix = prefix.unsqueeze(0) 
         suffix = suffix.unsqueeze(0)
         prefix = prefix + bias # like a shifted ctx
         suffix = suffix + bias
-        
+        # print(suffix.shape, prefix.shape)
          
         if len(self.pad_signal.shape) == 2:
             self.pad_signal = self.pad_signal.unsqueeze(0)
@@ -288,24 +292,31 @@ class ConditionalLearnablePromptExtractor(PromptExtractor):
                 )
                 for noun, length in zip(noun_list, lengths)
             ]
-        )  # cls,77,512
+        )  # cls,77,512   # lengths,bs,77,512
         
-        
+        print(embeddings.shape,"embeddings")
+        #exit()
         cls = len(lengths)
         indices = torch.Tensor(lengths).long().to(embeddings.device) - 1     #pointtolastwordinsent   #indices.repeat(batch_size)
-        indices = indices.repeat(batch_size)
         #print(indices,"INDICES")
         #print(indices.shape,"shape of indices")
         #exit()
-        embeddings = embeddings.reshape(cls*batch_size, 77, 512)         #batch_size
-        text_features = self.get_text_feature(embeddings, indices, clip_model,features)
-        text_features = text_features.reshape(batch_size,(cls*batch_size)//batch_size,512)
-        text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+        embeddings = embeddings.permute(1,0,2,3)
+        # embeddings = embeddings.reshape(cls*batch_size, 77, 512)         #batch_size
+        text_features = []
+        for emb in embeddings:
+            text_feature = self.get_text_feature(emb, indices, clip_model,features)
+            text_feature = text_feature / text_feature.norm(dim=-1, keepdim=True)
+            text_features.append(text_feature)
+        text_features = torch.stack(text_features)
+        # text_features = text_features.reshape(batch_size,(cls*batch_size)//batch_size,512)
+        
 
         return text_features
 
     def _update_noun_features(self, noun_list, clip_model,features):
         batch_size=features.shape[0]
+        # batch_size = 1
         left_class_names = [noun for noun in noun_list if noun not in self.noun_bucket]
         if len(left_class_names) > 0:
             
@@ -356,18 +367,16 @@ class ConditionalLearnablePromptExtractor(PromptExtractor):
     @staticmethod
     def get_text_feature(x, indices, clip_model,features):
         batch_size=features.shape[0]
+        # batch_size = 1
         x = x + clip_model.positional_embedding.type(clip_model.dtype)
         x = x.permute(1, 0, 2)  # NLD -> LND
-        y = torch.zeros_like(x).to(x.device) 
-        for k in range(0,batch_size,156):
-            #s = x[k*156:(k+1)*156]
-            y[:,k*156:(k+1)*156] = clip_model.transformer(x[:,k*156:(k+1)*156])
-        y = y.permute(1, 0, 2)  # LND -> NLD
-        y = clip_model.ln_final(y).type(clip_model.dtype)
+        x = clip_model.transformer(x)
+        x = x.permute(1, 0, 2)  # LND -> NLD
+        x = clip_model.ln_final(x).type(clip_model.dtype)
         # take features from the eot embedding (eot_token is the highest number in each sequence)
         #indices = indices.repeat(batch_size)    #batch_size
-        y = y[torch.arange(y.shape[0]), indices] @ clip_model.text_projection  #imp
-        return y
+        x = x[torch.arange(x.shape[0]), indices] @ clip_model.text_projection  #imp
+        return x
        
      
     @property
