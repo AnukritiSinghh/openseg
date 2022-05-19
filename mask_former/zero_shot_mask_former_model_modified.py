@@ -262,7 +262,6 @@ class ZeroShotMaskFormer(MaskFormer):
             clip_cls, valid_flag = self.region_clip_adapter(
                 image, class_names, mask_pred, normalize=True, features=features,
             )
-            clip_cls = clip_cls[0]
             if clip_cls is None:
                 clip_cls = torch.empty(0, mask_cls.shape[-1] + 1, device=self.device)
             # softmax before index or after?
