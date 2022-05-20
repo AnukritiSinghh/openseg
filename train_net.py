@@ -7,7 +7,6 @@ This script is a simplified version of the training script in detectron2/tools.
 import torch.multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_system')
 
-
 import sys
 import torch
 from torch.utils.data import dataloader
