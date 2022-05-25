@@ -7,7 +7,6 @@ from .text_prompt import (
     VILDPromptExtractor,
     LearnablePromptExtractor,
     ConditionalLearnablePromptExtractor,
-    
 )
 from .adapter import ClipAdapter, MaskFormerClipAdapter, PerPixelClipAdapter
 
@@ -36,8 +35,9 @@ def build_prompt_learner(cfg):
                 strict=False,
             )
             for param in prompt_learner.parameters():
-                param.requires_grad = False
+                param.requires_grad = True
             prompt_learner.with_trainable_params = False
+            prompt_learner.with_conditional_trainable_params = True
             log_first_n(
                 logging.INFO,
                 "Load Prompt Learner from {}".format(cfg.PROMPT_CHECKPOINT),
@@ -57,6 +57,7 @@ def build_prompt_learner(cfg):
                 "Prompt Learner training params: {}".format(trainable_params),
                 1,
             )
+     
     elif cfg.PROMPT_LEARNER == "learnable":
         prompt_learner = LearnablePromptExtractor(
             prompt_dim=cfg.PROMPT_DIM,
