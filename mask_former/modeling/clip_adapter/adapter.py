@@ -3,13 +3,14 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 from detectron2.structures import BitMasks
+from detectron2.modeling.backbone import Backbone     #changed
 from .utils import build_clip_model, crop_with_mask, CLIP
 from .text_prompt import PromptExtractor
 
 
 class ClipAdapter(nn.Module):
     def __init__(self, clip_model_name: str, prompt_learner: PromptExtractor):
-        super().__init__()
+        super().__init__()       
         self.clip_model = build_clip_model(clip_model_name)
         self.prompt_learner = prompt_learner
         self.prompt_learner.init_buffer(self.clip_model)
@@ -17,22 +18,37 @@ class ClipAdapter(nn.Module):
 
     def forward(self, image: torch.Tensor, text: List[str], **kwargs):
         image = self._preprocess_image(image, **kwargs)
-        text_feature = self.get_text_features(text)  # k,feat_dim
         image_features = self.get_image_features(image)
+        #print(image_features.shape,"image_features")
+        image_features_ = image_features.unsqueeze(2)
+        image_features_ = image_features_.unsqueeze(3)
+        #print(image_features_.shape,"image_features_")
+        text_feature = self.get_text_features(text,image_features_)  # k,feat_dim
         return self.get_sim_logits(text_feature, image_features)
 
     def _preprocess_image(self, image: torch.Tensor):
         return image
 
-    def _get_text_features(self, noun_list: List[str]):
-        if not self.prompt_learner.with_trainable_params:
+    def _get_text_features(self, noun_list: List[str], features=None):
+        if self.prompt_learner.with_conditional_trainable_params:
+            text_features = self.prompt_learner(noun_list, self.clip_model, features)
+            self.text_feature_buffer.update(
+                {
+                    noun: text_feature.detach()
+                    for noun, text_feature in zip(noun_list, text_features)
+                }
+            )
+            return text_features
+        
+        
+        '''if not self.prompt_learner.with_trainable_params:
 
             left_noun_list = [
                 noun for noun in noun_list if noun not in self.text_feature_buffer
             ]
             if len(left_noun_list) > 0:
                 left_text_features = self.prompt_learner(
-                    left_noun_list, self.clip_model
+                    left_noun_list, self.clip_model,
                 )
                 self.text_feature_buffer.update(
                     {
@@ -42,23 +58,24 @@ class ClipAdapter(nn.Module):
                         )
                     }
                 )
-            return torch.stack([self.text_feature_buffer[noun] for noun in noun_list])
-        else:
-            text_features = self.prompt_learner(noun_list, self.clip_model)
+            return torch.stack([self.text_feature_buffer[noun] for noun in noun_list])'''
+        '''else:
+            text_features = self.prompt_learner(noun_list, self.clip_model, features=None)
             self.text_feature_buffer.update(
                 {
                     noun: text_feature.detach()
                     for noun, text_feature in zip(noun_list, text_features)
                 }
             )
-            return text_features
+            return text_features'''
 
-    def get_text_features(self, noun_list: List[str]):
-        return self._get_text_features(noun_list)
+    def get_text_features(self, noun_list: List[str], features):
+        return self._get_text_features(noun_list, features)
 
     def get_image_features(self, image: torch.Tensor):
         image_features = self.clip_model.visual(image)
         image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+        #print(image_features.shape,"image_features inside image_feat")
         return image_features
 
     def get_sim_logits(
@@ -67,7 +84,11 @@ class ClipAdapter(nn.Module):
         image_features: torch.Tensor,
         temperature: float = 100,
     ):
-        return temperature * image_features @ text_features.T
+        #print(text_features.shape,"text_features inside sim_logits before permute")
+        text_features = text_features.permute(0, 2, 1)
+        #a = temperature*torch.einsum('bi,bji->bj', image_features, text_features)
+        return temperature * image_features @ text_features
+        #return a
 
     def normalize_feature(self, feat: torch.Tensor):
         return feat / feat.norm(dim=-1, keepdim=True)
@@ -120,6 +141,7 @@ class MaskFormerClipAdapter(ClipAdapter):
         text: List[str],
         mask: torch.Tensor,
         normalize: bool = True,
+        features = None,
     ):
         image, valid_flag = self._preprocess_image(image, mask, normalize=normalize)
         if image is None:
@@ -130,7 +152,9 @@ class MaskFormerClipAdapter(ClipAdapter):
             )
         else:
             image_features = self.get_image_features(image)
-        text_feature = self.get_text_features(text)  # k,feat_dim
+        text_feature = self.get_text_features(text,features)  # k,feat_dim
+        #print(valid_flag.shape,"valid_flag")
+        #print(self.get_sim_logits(text_feature, image_features).shape,"return")
         return self.get_sim_logits(text_feature, image_features), valid_flag
 
     def _preprocess_image(
@@ -175,13 +199,18 @@ class MaskFormerClipAdapter(ClipAdapter):
             regions = torch.cat(regions)
         return regions, valid
 
-    def get_text_features(self, noun_list: List[str]):
-        object_text_features = self._get_text_features(noun_list)
+    def get_text_features(self, noun_list: List[str], features=None):       #changed
+        #print(features,"features")
+        features = features.get("res4")     #24,1024 after avgpool2d is needed
+        batch_size=features.shape[0]
+        #print(batch_size,"batch_size")
+        object_text_features = self._get_text_features(noun_list, features)   
         non_object_text_features = (
             self.non_object_embedding
             / self.non_object_embedding.norm(dim=-1, keepdim=True)
         )
-        return torch.cat([object_text_features, non_object_text_features], dim=0)
+        non_object_text_features = non_object_text_features.repeat(batch_size,1,1)
+        return torch.cat([object_text_features, non_object_text_features], dim=1)
 
 
 class PerPixelClipAdapter(ClipAdapter):
