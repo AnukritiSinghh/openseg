@@ -16,7 +16,7 @@ from multiprocessing.reduction import ForkingPickler
 default_collate_func = dataloader.default_collate
 
 
-def default_collate_override(batch):
+'''def default_collate_override(batch):
   dataloader._use_shared_memory = False
   return default_collate_func(batch)
 
@@ -28,7 +28,7 @@ for t in torch._storage_classes:
         del ForkingPickler.dispatch[t]
   else:
     if t in ForkingPickler._extra_reducers:
-        del ForkingPickler._extra_reducers[t]
+        del ForkingPickler._extra_reducers[t]'''
 
 from functools import partial
 import copy
