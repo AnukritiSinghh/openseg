@@ -5,8 +5,8 @@ from .text_prompt import (
     PredefinedPromptExtractor,
     ImageNetPromptExtractor,
     VILDPromptExtractor,
-    LearnablePromptExtractor, 
-    ConditionalLearnablePromptExtractor,    # add conditional learnable prompt
+    LearnablePromptExtractor,
+    ConditionalLearnablePromptExtractor,
 )
 from .adapter import ClipAdapter, MaskFormerClipAdapter, PerPixelClipAdapter
 
@@ -18,8 +18,61 @@ def build_prompt_learner(cfg):
         prompt_learner = ImageNetPromptExtractor()
     elif cfg.PROMPT_LEARNER == "vild":
         prompt_learner = VILDPromptExtractor()
-    elif cfg.PROMPT_LEARNER == "conditional_learnable":  #the inputs/parameters might change according to conditional
+    elif cfg.PROMPT_LEARNER == "conditionallearnable":
         prompt_learner = ConditionalLearnablePromptExtractor(
+            prompt_dim=cfg.PROMPT_DIM,
+            prompt_shape=cfg.PROMPT_SHAPE,
+        )
+        print("here_init")
+        if cfg.PROMPT_CHECKPOINT != "":
+            checkpoint = torch.load(cfg.PROMPT_CHECKPOINT, map_location="cpu")["model"]
+            missing, unexpected = prompt_learner.load_state_dict(
+                {
+                    ".".join(k.split(".")[2:]): v
+                    for k, v in checkpoint.items()
+                    if "prompt_learner" in k
+                },
+                strict=False,
+            )
+            '''para = prompt_learner.state_dict()
+            print(para.keys(),"keys")
+            exit()
+            
+            for name, param in prompt_learner.named_parameters():
+                if param.requires_grad:print(name)'''
+                    
+            for name, param in prompt_learner.named_parameters():
+                if param.requires_grad and 'prefix_prompt' in name:
+                    param.requires_grad = False
+            #for name, param in prompt_learner.named_parameters():print(name, param)
+            #exit()
+            
+            '''for param in prompt_learner.parameters():
+                param.requires_grad = True'''
+            prompt_learner.with_trainable_params = False    # original code
+            
+            log_first_n(
+                logging.INFO,
+                "Load Prompt Learner from {}".format(cfg.PROMPT_CHECKPOINT),
+                1,
+            )
+            log_first_n(logging.WARN, "Missing {}".format(missing), 1)
+            log_first_n(logging.WARN, "Unexpected {}".format(unexpected), 1)
+
+        else:
+            trainable_params = [
+                k
+                for k, v in prompt_learner.named_parameters()
+                if v.requires_grad == True
+            ]
+            log_first_n(
+                logging.INFO,
+                "Prompt Learner training params: {}".format(trainable_params),
+                1,
+            )
+     
+    elif cfg.PROMPT_LEARNER == "learnable":
+        prompt_learner = LearnablePromptExtractor(
             prompt_dim=cfg.PROMPT_DIM,
             prompt_shape=cfg.PROMPT_SHAPE,
         )
