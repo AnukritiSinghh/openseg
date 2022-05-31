@@ -18,7 +18,7 @@ from .modeling.clip_adapter import (
     ImageNetPromptExtractor,
     VILDPromptExtractor,
     LearnablePromptExtractor,
-    ConditionalLearnablePromptExtractor,     #add conditional learnable 
+    ConditionalLearnablePromptExtractor,
 )
 from .modeling.clip_adapter.utils import CLIP
 
@@ -54,7 +54,12 @@ class ProposalClipClassifier(nn.Module):
             prompt_learner = ImageNetPromptExtractor()
         elif cfg.MODEL.CLIP_ADAPTER.PROMPT_LEARNER == "vild":
             prompt_learner = VILDPromptExtractor()
-        elif cfg.MODEL.CLIP_ADAPTER.PROMPT_LEARNER == "Conditional_learnable": #might change the inputs
+        elif cfg.MODEL.CLIP_ADAPTER.PROMPT_LEARNER == "learnable":
+            prompt_learner = LearnablePromptExtractor(
+                prompt_dim=cfg.MODEL.CLIP_ADAPTER.PROMPT_DIM,
+                prompt_shape=cfg.MODEL.CLIP_ADAPTER.PROMPT_SHAPE,
+            )
+        elif cfg.MODEL.CLIP_ADAPTER.PROMPT_LEARNER == "conditionallearnable":
             prompt_learner = ConditionalLearnablePromptExtractor(
                 prompt_dim=cfg.MODEL.CLIP_ADAPTER.PROMPT_DIM,
                 prompt_shape=cfg.MODEL.CLIP_ADAPTER.PROMPT_SHAPE,
