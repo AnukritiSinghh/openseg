@@ -47,6 +47,7 @@ class ZeroShotMaskFormer(MaskFormer):
         clip_ensemble_weight: float,
         pixel_mean: Tuple[float],
         pixel_std: Tuple[float],
+        conditionallearnable=False,
     ):
         """
         Args:
@@ -86,6 +87,7 @@ class ZeroShotMaskFormer(MaskFormer):
         )
         self.clip_adapter: ClipAdapter = clip_adapter
         self._region_clip_adapter = region_clip_adapter
+        self.conditionallearnable = conditionallearnable
 
         self.clip_ensemble: bool = clip_ensemble
         self.clip_ensemble_weight: float = clip_ensemble_weight
@@ -128,7 +130,7 @@ class ZeroShotMaskFormer(MaskFormer):
         init_kwargs[
             "clip_ensemble_weight"
         ] = cfg.MODEL.CLIP_ADAPTER.CLIP_ENSEMBLE_WEIGHT
-
+        init_kwargs["conditionallearnable"] = cfg.MODEL.CLIP_ADAPTER.PROMPT_LEARNER    #changed
         return init_kwargs
 
     def forward(self, batched_inputs):
@@ -157,6 +159,7 @@ class ZeroShotMaskFormer(MaskFormer):
                     segments_info (list[dict]): Describe each segment in `panoptic_seg`.
                         Each dict contains keys "id", "category_id", "isthing".
         """
+        
         dataset_name = [x["meta"]["dataset_name"] for x in batched_inputs]
         assert len(set(dataset_name)) == 1
         dataset_name = dataset_name[0]
@@ -164,11 +167,21 @@ class ZeroShotMaskFormer(MaskFormer):
         images = [x["image"].to(self.device) for x in batched_inputs]
         images = [(x - self.pixel_mean) / self.pixel_std for x in images]
         images = ImageList.from_tensors(images, self.size_divisibility)
+        #print(images.tensor,"images")
+        #print(self.backbone,"backbone")
 
-        features = self.backbone(images.tensor)
+        features = self.backbone(images.tensor)    
         outputs = self.sem_seg_head(features)
         class_names = self.get_class_name_list(dataset_name)
-        text_features = self.clip_adapter.get_text_features(class_names) #get_text_features will have image features with this class_names
+        #print(features,"features")
+        #exit()
+        
+        if self.conditionallearnable:                                             
+            text_features = self.clip_adapter.get_text_features(class_names,features) 
+            
+        else:
+            text_features = self.clip_adapter.get_text_features(class_names,features=None) 
+            
         outputs["pred_logits"] = self.clip_adapter.get_sim_logits(
             text_features, self.clip_adapter.normalize_feature(outputs["pred_logits"])
         )
@@ -224,7 +237,7 @@ class ZeroShotMaskFormer(MaskFormer):
                 image = input_per_image["image"].to(self.device)
                 # semantic segmentation inference
                 r = self.semantic_inference(
-                    mask_cls_result, mask_pred_result, image, class_names, dataset_name
+                    mask_cls_result, mask_pred_result, image, class_names, dataset_name, features,
                 )
                 height = input_per_image.get("height", image_size[0])
                 width = input_per_image.get("width", image_size[1])
@@ -240,20 +253,31 @@ class ZeroShotMaskFormer(MaskFormer):
 
             return processed_results
 
-    def semantic_inference(self, mask_cls, mask_pred, image, class_names, dataset_name):
-        mask_cls = F.softmax(mask_cls, dim=-1)[..., :-1]
+    def semantic_inference(self, mask_cls, mask_pred, image, class_names, dataset_name, features):
+        mask_cls = F.softmax(mask_cls, dim=-1)[..., :-1]    #[100,171] should be [99,172]
         mask_pred = mask_pred.sigmoid()
         # get the classification result from clip model
         if self.clip_ensemble:
             clip_cls, valid_flag = self.region_clip_adapter(
-                image, class_names, mask_pred, normalize=True
+                image, class_names, mask_pred, normalize=True, features=features,
             )
+            #print(clip_cls,"clip_cls 1")
+            #print(clip_cls.shape,"clip_cls 1 shape")
+            #clip_cls = clip_cls[0]
             if clip_cls is None:
                 clip_cls = torch.empty(0, mask_cls.shape[-1] + 1, device=self.device)
+                #clip_cls = clip_cls[0]
+                #print(clip_cls,"clip_cls after none")
+            else:
+                clip_cls = clip_cls[0]
+                
             # softmax before index or after?
+            #print(clip_cls,"clip_cls 2")
             clip_cls = F.softmax(clip_cls[:, :-1], dim=-1)
+            #print(clip_cls.shape,"clip_cls")
             if self.clip_ensemble_weight > 0:
                 map_back_clip_cls = mask_cls.new_ones(mask_cls.shape)
+                #print(map_back_clip_cls.shape,"map_back_clip_cls")
                 map_back_clip_cls[valid_flag] = clip_cls
                 if hasattr(MetadataCatalog.get(dataset_name), "trainable_flag"):
                     trained_mask = torch.Tensor(
