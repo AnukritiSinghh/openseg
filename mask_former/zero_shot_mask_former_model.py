@@ -256,28 +256,25 @@ class ZeroShotMaskFormer(MaskFormer):
     def semantic_inference(self, mask_cls, mask_pred, image, class_names, dataset_name, features):
         mask_cls = F.softmax(mask_cls, dim=-1)[..., :-1]    #[100,171] should be [99,172]
         mask_pred = mask_pred.sigmoid()
+        base_class_index = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20, 22, 23, 24, 27, 28, 31, 32, 35, 36, 37, 38, 39, 40, 42, 43, 44, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 58, 59, 60, 61, 62, 63, 64, 65, 67, 70, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 84, 85, 86, 88, 89, 90, 92, 93, 94, 95, 96, 97, 98, 99, 101, 102, 103, 104, 105, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 146, 147, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 170, 171, 173, 174, 175, 176, 177, 178, 179, 180, 181, 182]
+        #print(type(base_class_index),"base_class_index")
+        #index = base_class_index.index('127')
+        #print('The index of 1:', index)
+        #exit()
+        #self.base_class_index = base_class_index
         # get the classification result from clip model
         if self.clip_ensemble:
             clip_cls, valid_flag = self.region_clip_adapter(
                 image, class_names, mask_pred, normalize=True, features=features,
             )
-            #print(clip_cls,"clip_cls 1")
-            #print(clip_cls.shape,"clip_cls 1 shape")
-            #clip_cls = clip_cls[0]
             if clip_cls is None:
                 clip_cls = torch.empty(0, mask_cls.shape[-1] + 1, device=self.device)
-                #clip_cls = clip_cls[0]
-                #print(clip_cls,"clip_cls after none")
             else:
                 clip_cls = clip_cls[0]
-                
             # softmax before index or after?
-            #print(clip_cls,"clip_cls 2")
             clip_cls = F.softmax(clip_cls[:, :-1], dim=-1)
-            #print(clip_cls.shape,"clip_cls")
             if self.clip_ensemble_weight > 0:
                 map_back_clip_cls = mask_cls.new_ones(mask_cls.shape)
-                #print(map_back_clip_cls.shape,"map_back_clip_cls")
                 map_back_clip_cls[valid_flag] = clip_cls
                 if hasattr(MetadataCatalog.get(dataset_name), "trainable_flag"):
                     trained_mask = torch.Tensor(
@@ -299,12 +296,20 @@ class ZeroShotMaskFormer(MaskFormer):
                 mask_cls = clip_cls
                 mask_pred = mask_pred[valid_flag]
         semseg = torch.einsum("qc,qhw->chw", mask_cls, mask_pred)
+        print(semseg,"semseg")
+        #exit()
+        offset = torch.zeros(semseg.shape).to(semseg.device)        # [171, 640, 962]
+        offset[base_class_index,:,:] = 0.1
+        print(offset,"offset")
+        exit()
+        semseg = semseg - offset
         return semseg
 
     def get_class_name_list(self, dataset_name):
         class_names = [
             c.strip() for c in MetadataCatalog.get(dataset_name).stuff_classes
         ]
+        #print(class_names,"class_names")
         return class_names
 
     @property
