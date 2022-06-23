@@ -88,16 +88,20 @@ class ZeroShotMaskFormer(MaskFormer):
             sem_seg_postprocess_before_inference=sem_seg_postprocess_before_inference,
             pixel_mean=pixel_mean,
             pixel_std=pixel_std,
-            clip_model_name=clip_model_name,
         )
         self.clip_adapter: ClipAdapter = clip_adapter
         self._region_clip_adapter = region_clip_adapter
-        self.clip_model_name: str = clip_model_name
+        
         self.clip_model = build_clip_model(clip_model_name)
+        self.image_encoder = self.clip_model.visual
+        self.dtype = self.clip_model.dtype
+        
         self.conditionallearnable = conditionallearnable
 
         self.clip_ensemble: bool = clip_ensemble
         self.clip_ensemble_weight: float = clip_ensemble_weight
+        
+       
 
     @classmethod
     def from_config(cls, cfg):
@@ -137,6 +141,7 @@ class ZeroShotMaskFormer(MaskFormer):
         init_kwargs[
             "clip_ensemble_weight"
         ] = cfg.MODEL.CLIP_ADAPTER.CLIP_ENSEMBLE_WEIGHT
+        init_kwargs["clip_model_name"] = cfg.MODEL.CLIP_ADAPTER.CLIP_MODEL_NAME
         init_kwargs["conditionallearnable"] = cfg.MODEL.CLIP_ADAPTER.PROMPT_LEARNER    #changed
         return init_kwargs
 
@@ -183,7 +188,10 @@ class ZeroShotMaskFormer(MaskFormer):
         #print(features,"features")
         #exit()
         image = torch.Tensor
-        image_features = self.get_image_features(image)
+        #image_features = self.get_image_features(image)
+        image_features = self.image_encoder(image)
+        image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+
         
         if self.conditionallearnable:                                             
             text_features = self.clip_adapter.get_text_features(class_names,image_features) 
@@ -321,10 +329,10 @@ class ZeroShotMaskFormer(MaskFormer):
             return self.clip_adapter
         return self._region_clip_adapter
     
-    def get_image_features(self, image: torch.Tensor):
+    '''def get_image_features(self, image: torch.Tensor):
         image_features = self.clip_model.visual(image)
         image_features = image_features / image_features.norm(dim=-1, keepdim=True)
         #print(image_features.shape,"image_features inside image_feat")
-        return image_features
+        return image_features'''
     
     
