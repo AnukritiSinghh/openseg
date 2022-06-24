@@ -175,11 +175,23 @@ class ZeroShotMaskFormer(MaskFormer):
         dataset_name = [x["meta"]["dataset_name"] for x in batched_inputs]
         assert len(set(dataset_name)) == 1
         dataset_name = dataset_name[0]
-
+        
+        #print(type(batched_inputs),"batched_inputs")
+        
         images = [x["image"].to(self.device) for x in batched_inputs]
+        image = [x["image"].to(self.device) for x in batched_inputs]
+        image = torch.cat(image)
+        image = self._preprocess_image(image,mask)
+        #image = images.tensor
+        #images2 = ["image" for image in batched_inputs]
+        #print(type(images),"images1")
         images = [(x - self.pixel_mean) / self.pixel_std for x in images]
+        #print(type(images),"images2")
+        #exit()
         images = ImageList.from_tensors(images, self.size_divisibility)
-        #print(images.tensor,"images")
+        #image = images.tensor
+        #print(type(image),"image")
+        #exit()
         #print(self.backbone,"backbone")
 
         features = self.backbone(images.tensor)    
@@ -187,10 +199,11 @@ class ZeroShotMaskFormer(MaskFormer):
         class_names = self.get_class_name_list(dataset_name)
         #print(features,"features")
         #exit()
-        image = torch.Tensor
+        #image = torch.Tensor
         #image_features = self.get_image_features(image)
         image_features = self.image_encoder(image)
         image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+        #exit()
 
         
         if self.conditionallearnable:                                             
@@ -335,4 +348,46 @@ class ZeroShotMaskFormer(MaskFormer):
         #print(image_features.shape,"image_features inside image_feat")
         return image_features'''
     
+    
+    def _preprocess_image(
+        self, image: torch.Tensor, mask: torch.Tensor, normalize: bool = True
+    ):
+        """crop, mask and normalize the image
+
+        Args:
+            image ([type]): [C,H,W]
+            mask ([type]): [K,H,W
+            normalize (bool, optional): [description]. Defaults to True.
+        """
+        dtype = mask.dtype
+        bin_mask = mask > self.mask_thr
+        valid = bin_mask.sum(dim=(-1, -2)) > 0
+        bin_mask = bin_mask[valid]
+        mask = mask[valid]
+        if not self.mask_matting:
+            mask = bin_mask
+        bin_mask = BitMasks(bin_mask)
+        bboxes = bin_mask.get_bounding_boxes()
+        # crop,mask
+        regions = [
+            crop_with_mask(
+                image.type(dtype),
+                single_mask.type(dtype),
+                bbox,
+                fill=self.mask_fill,
+                expand_ratio=self.mask_expand_ratio,
+            )[None, ...]
+            for bbox, single_mask in zip(bboxes, mask)
+        ]
+        if len(regions) == 0:
+            return None, valid
+        if normalize:
+            regions = [(r - self.pixel_mean) / self.pixel_std for r in regions]
+        # resize
+        if self.region_resized:
+            regions = [
+                F.interpolate(r, size=(224, 224), mode="bicubic") for r in regions
+            ]
+            regions = torch.cat(regions)
+        return regions, valid
     
