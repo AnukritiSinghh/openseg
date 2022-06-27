@@ -1,5 +1,6 @@
 from typing import List
 import torch
+import torchvision
 from torch import nn
 from torch.nn import functional as F
 from detectron2.structures import BitMasks
@@ -32,7 +33,7 @@ class ClipAdapter(nn.Module):
         #image_features_ = image_features_.unsqueeze(3)
         #print(image_features_.shape,"image_features_")
         #text_feature = self.get_text_features(text, features_masked)  # k,feat_dim
-        return self.get_sim_logits(text_feature, image_features)
+        return self.get_sim_logits(text_feature, features_unmasked)
 
     def _preprocess_image(self, image: torch.Tensor):
         return image
@@ -83,7 +84,7 @@ class ClipAdapter(nn.Module):
     def get_image_features(self, image: torch.Tensor):
         image_features = self.clip_model.visual(image)
         image_features = image_features / image_features.norm(dim=-1, keepdim=True)
-        #print(image_features.shape,"image_features inside image_feat")
+        # print(image_features.shape,"image_features inside image_feat")
         return image_features
 
     def get_sim_logits(
@@ -148,11 +149,20 @@ class MaskFormerClipAdapter(ClipAdapter):
         image: torch.Tensor,
         text: List[str],
         mask: torch.Tensor,
+        image2: torch.Tensor,
         normalize: bool = True,
-        image_features = None,
+        features_unmasked = None,
     ):
-        features_unmasked = self.get_image_features(image)
+
+        #print(image.shape,"shape")
         image, valid_flag = self._preprocess_image(image, mask, normalize=normalize)    #removing mask 
+        image2 = self._preprocess_image2(image2)
+        #print(image2.shape,"image2 after preprocess")     # [1, 3, 640, 962]
+        transform = torchvision.transforms.Resize(640,640)
+        image2 = transform(image2)
+        print(image2.shape,"image2 after preprocess and crop")
+        exit()
+       
         if image is None:
             return None, valid_flag
         if isinstance(image, list):
@@ -161,6 +171,17 @@ class MaskFormerClipAdapter(ClipAdapter):
             )
         else:
             image_features = self.get_image_features(image)
+            
+        if image2 is None:
+            return None
+        if isinstance(image2, list):
+            features_unmasked = torch.cat(
+                [self.get_image_features(image_i) for image_i in image2], dim=0
+            )
+        else:
+            features_unmasked = self.get_image_features(image2)
+            
+        
         text_feature = self.get_text_features(text, features_unmasked)  # k,feat_dim
         return self.get_sim_logits(text_feature, image_features), valid_flag
 
@@ -205,9 +226,12 @@ class MaskFormerClipAdapter(ClipAdapter):
             ]
             regions = torch.cat(regions)
         return regions, valid
+    
+    def _preprocess_image2(self, image2: torch.Tensor):
+        return (image2.to(self.pixel_mean.device) - self.pixel_mean) / self.pixel_std
 
     def get_text_features(self, noun_list: List[str], features_unmasked=None):       #changed
-        #features_unmasked = features_unmasked.get("res4")     #24,1024 after avgpool2d is needed     #1,512 new, batch size,
+        # features_unmasked = features_unmasked.get("res4")     #24,1024 after avgpool2d is needed     #1,512 new, batch size,
         batch_size=features_unmasked.shape[0]
         object_text_features = self._get_text_features(noun_list, features_unmasked)   
         non_object_text_features = (
