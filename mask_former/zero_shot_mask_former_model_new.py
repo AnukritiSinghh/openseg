@@ -94,6 +94,7 @@ class ZeroShotMaskFormer(MaskFormer):
         
         self.clip_model = build_clip_model(clip_model_name)
         self.image_encoder = self.clip_model.visual
+        #print(image_encoder.shape,"image_encoder")
         self.dtype = self.clip_model.dtype
         
         self.conditionallearnable = conditionallearnable
@@ -179,38 +180,32 @@ class ZeroShotMaskFormer(MaskFormer):
         #print(type(batched_inputs),"batched_inputs")
         
         images = [x["image"].to(self.device) for x in batched_inputs]
-        image = [x["image"].to(self.device) for x in batched_inputs]
-        image = torch.cat(image)
-        image = self._preprocess_image(image,mask)
-        #image = images.tensor
-        #images2 = ["image" for image in batched_inputs]
-        #print(type(images),"images1")
         images = [(x - self.pixel_mean) / self.pixel_std for x in images]
-        #print(type(images),"images2")
-        #exit()
         images = ImageList.from_tensors(images, self.size_divisibility)
-        #image = images.tensor
-        #print(type(image),"image")
-        #exit()
-        #print(self.backbone,"backbone")
+        
+        #image = [x["image"].to(self.device) for x in batched_inputs]
+        image = images.tensor
+        image2 = images.tensor
+        print(image2.shape,"image shape 1")      #[batch_size, 3, 640, 640]
+        #print(image.shape,"image shape")   #[12, 640, 640]  should be [batch_size, 3, 244, 224]
+    
+       
 
         features = self.backbone(images.tensor)    
         outputs = self.sem_seg_head(features)
         class_names = self.get_class_name_list(dataset_name)
-        #print(features,"features")
-        #exit()
-        #image = torch.Tensor
-        #image_features = self.get_image_features(image)
-        image_features = self.image_encoder(image)
-        image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+        
+        
+        features_unmasked = self.image_encoder(image.type(self.dtype))
+        features_unmasked = features_unmasked / features_unmasked.norm(dim=-1, keepdim=True)
         #exit()
 
         
         if self.conditionallearnable:                                             
-            text_features = self.clip_adapter.get_text_features(class_names,image_features) 
+            text_features = self.clip_adapter.get_text_features(class_names, features_unmasked) 
             
         else:
-            text_features = self.clip_adapter.get_text_features(class_names,image_features=None) 
+            text_features = self.clip_adapter.get_text_features(class_names, features_unmasked) 
             
         outputs["pred_logits"] = self.clip_adapter.get_sim_logits(
             text_features, self.clip_adapter.normalize_feature(outputs["pred_logits"])
@@ -267,7 +262,7 @@ class ZeroShotMaskFormer(MaskFormer):
                 image = input_per_image["image"].to(self.device)
                 # semantic segmentation inference
                 r = self.semantic_inference(
-                    mask_cls_result, mask_pred_result, image, class_names, dataset_name, image_features,
+                    mask_cls_result, mask_pred_result, image, image2, class_names, dataset_name, features_unmasked,
                 )
                 height = input_per_image.get("height", image_size[0])
                 width = input_per_image.get("width", image_size[1])
@@ -283,13 +278,13 @@ class ZeroShotMaskFormer(MaskFormer):
 
             return processed_results
 
-    def semantic_inference(self, mask_cls, mask_pred, image, class_names, dataset_name, image_features):
+    def semantic_inference(self, mask_cls, mask_pred, image, image2, class_names, dataset_name, features_unmasked):
         mask_cls = F.softmax(mask_cls, dim=-1)[..., :-1]    #[100,171] should be [99,172]
         mask_pred = mask_pred.sigmoid()
         base_class_index = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20, 22, 23, 24, 27, 28, 31, 32, 35, 36, 37, 38, 39, 40, 42, 43, 44, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 58, 59, 60, 61, 62, 63, 64, 65, 67, 70, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 84, 85, 86, 88, 89, 90, 92, 93, 94, 95, 96, 97, 98, 99, 101, 102, 103, 104, 105, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 146, 147, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 170, 171, 173, 174, 175, 176, 177, 178, 179, 180, 181, 182]
         if self.clip_ensemble:
             clip_cls, valid_flag = self.region_clip_adapter(
-                image, class_names, mask_pred, normalize=True, image_features=image_features,
+                image, class_names, mask_pred, image2, normalize=True, features_unmasked=features_unmasked,
             )
             if clip_cls is None:
                 clip_cls = torch.empty(0, mask_cls.shape[-1] + 1, device=self.device)
@@ -342,11 +337,11 @@ class ZeroShotMaskFormer(MaskFormer):
             return self.clip_adapter
         return self._region_clip_adapter
     
-    '''def get_image_features(self, image: torch.Tensor):
+    def get_image_features(self, image: torch.Tensor):
         image_features = self.clip_model.visual(image)
         image_features = image_features / image_features.norm(dim=-1, keepdim=True)
         #print(image_features.shape,"image_features inside image_feat")
-        return image_features'''
+        return image_features
     
     
     def _preprocess_image(
