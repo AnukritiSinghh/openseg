@@ -5,6 +5,8 @@ from typing import Tuple
 import torch
 from torch import nn
 from torch.nn import functional as F
+import torchvision
+import torchvision.transforms.functional as fn
 
 from detectron2.config import configurable
 from detectron2.data import MetadataCatalog
@@ -186,8 +188,9 @@ class ZeroShotMaskFormer(MaskFormer):
         #image = [x["image"].to(self.device) for x in batched_inputs]
         image = images.tensor
         image2 = images.tensor
-        print(image2.shape,"image shape 1")      #[batch_size, 3, 640, 640]
-        #print(image.shape,"image shape")   #[12, 640, 640]  should be [batch_size, 3, 244, 224]
+        # image2 = fn.resize(image2, size=[640,640])
+        #print(image2.shape,"image shape 1")      #[batch_size, 3, 640, 640]
+        #print(image.shape,"image shape")   #[12, 640, 640]  should be [batch_size, 3, 244, 224] [batch_size, 3, 640, 640]
     
        
 
@@ -315,13 +318,15 @@ class ZeroShotMaskFormer(MaskFormer):
                 mask_cls = clip_cls
                 mask_pred = mask_pred[valid_flag]
         semseg = torch.einsum("qc,qhw->chw", mask_cls, mask_pred)
-        #print(semseg,"semseg")
+        #print(semseg.shape,"semseg")
         #exit()
-        offset = torch.zeros(semseg.shape).to(semseg.device)        # [171, 640, 962]
-        offset[base_class_index,:,:] = 0.1
+        # offset = torch.zeros(semseg.shape).to(semseg.device)        # [171, 640, 962]
+        #print(offset.shape,"offset")
+        #exit()
+        # offset[base_class_index,:,:] = 0.5
         #print(offset,"offset")
         #exit()
-        semseg = semseg - offset
+        # semseg = semseg - offset
         return semseg
 
     def get_class_name_list(self, dataset_name):
