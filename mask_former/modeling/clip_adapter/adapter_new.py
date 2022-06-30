@@ -1,6 +1,7 @@
 from typing import List
 import torch
 import torchvision
+import torchvision.transforms.functional as fn
 from torch import nn
 from torch.nn import functional as F
 from detectron2.structures import BitMasks
@@ -25,6 +26,7 @@ class ClipAdapter(nn.Module):
         features_unmasked = features_unmasked.unsqueeze(3)
         text_feature = self.get_text_features(text, features_unmasked)  # k,feat_dim
         image = self._preprocess_image(image, **kwargs)   #no mask
+        # print(image.shape,"image shape")
         image_features = self.get_image_features(image)
         #print(image_features,"image_features")
         #exit()
@@ -154,14 +156,15 @@ class MaskFormerClipAdapter(ClipAdapter):
         features_unmasked = None,
     ):
 
-        #print(image.shape,"shape")
+        # print(image2.shape,"image2  shape")
         image, valid_flag = self._preprocess_image(image, mask, normalize=normalize)    #removing mask 
         image2 = self._preprocess_image2(image2)
         #print(image2.shape,"image2 after preprocess")     # [1, 3, 640, 962]
-        transform = torchvision.transforms.Resize(640,640)
-        image2 = transform(image2)
-        print(image2.shape,"image2 after preprocess and crop")
-        exit()
+        # torchvision.transforms.Resize(640,640)(image2)
+        #image2 = transform(image2)
+        # image2 = fn.resize(image2, size=[640,640])
+        # print(image2.shape,"image2 after preprocess")
+        #exit()
        
         if image is None:
             return None, valid_flag
@@ -185,6 +188,10 @@ class MaskFormerClipAdapter(ClipAdapter):
         text_feature = self.get_text_features(text, features_unmasked)  # k,feat_dim
         return self.get_sim_logits(text_feature, image_features), valid_flag
 
+    def _preprocess_image2(self, image2: torch.Tensor):
+        return image2
+    
+    
     def _preprocess_image(
         self, image: torch.Tensor, mask: torch.Tensor, normalize: bool = True
     ):
@@ -227,8 +234,6 @@ class MaskFormerClipAdapter(ClipAdapter):
             regions = torch.cat(regions)
         return regions, valid
     
-    def _preprocess_image2(self, image2: torch.Tensor):
-        return (image2.to(self.pixel_mean.device) - self.pixel_mean) / self.pixel_std
 
     def get_text_features(self, noun_list: List[str], features_unmasked=None):       #changed
         # features_unmasked = features_unmasked.get("res4")     #24,1024 after avgpool2d is needed     #1,512 new, batch size,
