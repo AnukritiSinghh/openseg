@@ -174,8 +174,12 @@ class ZeroShotMaskFormer(MaskFormer):
                     segments_info (list[dict]): Describe each segment in `panoptic_seg`.
                         Each dict contains keys "id", "category_id", "isthing".
         """
+        '''for x in batched_inputs:
+            print(x,"this is x")
+        exit()'''
         
         dataset_name = [x["meta"]["dataset_name"] for x in batched_inputs]
+        #exit()
         assert len(set(dataset_name)) == 1
         dataset_name = dataset_name[0]
         
@@ -188,7 +192,7 @@ class ZeroShotMaskFormer(MaskFormer):
         #image = [x["image"].to(self.device) for x in batched_inputs]
         image = images.tensor
         image2 = images.tensor
-        # image2 = fn.resize(image2, size=[640,640])
+        # image2 = fn.resize(image2, size=[244,244])
         #print(image2.shape,"image shape 1")      #[batch_size, 3, 640, 640]
         #print(image.shape,"image shape")   #[12, 640, 640]  should be [batch_size, 3, 244, 224] [batch_size, 3, 640, 640]
     
@@ -208,7 +212,7 @@ class ZeroShotMaskFormer(MaskFormer):
             text_features = self.clip_adapter.get_text_features(class_names, features_unmasked) 
             
         else:
-            text_features = self.clip_adapter.get_text_features(class_names, features_unmasked) 
+            text_features = self.clip_adapter.get_text_features(class_names, features_unmasked=None) 
             
         outputs["pred_logits"] = self.clip_adapter.get_sim_logits(
             text_features, self.clip_adapter.normalize_feature(outputs["pred_logits"])
@@ -283,8 +287,11 @@ class ZeroShotMaskFormer(MaskFormer):
 
     def semantic_inference(self, mask_cls, mask_pred, image, image2, class_names, dataset_name, features_unmasked):
         mask_cls = F.softmax(mask_cls, dim=-1)[..., :-1]    #[100,171] should be [99,172]
+        #print(mask_cls,"mask_cls")
+        #exit()
         mask_pred = mask_pred.sigmoid()
-        base_class_index = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20, 22, 23, 24, 27, 28, 31, 32, 35, 36, 37, 38, 39, 40, 42, 43, 44, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 58, 59, 60, 61, 62, 63, 64, 65, 67, 70, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 84, 85, 86, 88, 89, 90, 92, 93, 94, 95, 96, 97, 98, 99, 101, 102, 103, 104, 105, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 146, 147, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 170, 171, 173, 174, 175, 176, 177, 178, 179, 180, 181, 182]
+        base_class_index = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155]
+        '''base_class_index = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20, 22, 23, 24, 27, 28, 31, 32, 35, 36, 37, 38, 39, 40, 42, 43, 44, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 58, 59, 60, 61, 62, 63, 64, 65, 67, 70, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 84, 85, 86, 88, 89, 90, 92, 93, 94, 95, 96, 97, 98, 99, 101, 102, 103, 104, 105, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 146, 147, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 170, 171, 173, 174, 175, 176, 177, 178, 179, 180, 181, 182]'''
         if self.clip_ensemble:
             clip_cls, valid_flag = self.region_clip_adapter(
                 image, class_names, mask_pred, image2, normalize=True, features_unmasked=features_unmasked,
@@ -318,15 +325,15 @@ class ZeroShotMaskFormer(MaskFormer):
                 mask_cls = clip_cls
                 mask_pred = mask_pred[valid_flag]
         semseg = torch.einsum("qc,qhw->chw", mask_cls, mask_pred)
-        #print(semseg.shape,"semseg")
+        #print(semseg,"semseg")
         #exit()
-        # offset = torch.zeros(semseg.shape).to(semseg.device)        # [171, 640, 962]
-        #print(offset.shape,"offset")
-        #exit()
-        # offset[base_class_index,:,:] = 0.5
+        offset = torch.zeros(semseg.shape).to(semseg.device)        # [171, 640, 962]
         #print(offset,"offset")
         #exit()
-        # semseg = semseg - offset
+        offset[:,base_class_index,:] = 0.5
+        #print(offset,"offset")
+        #exit()
+        semseg = semseg - offset
         return semseg
 
     def get_class_name_list(self, dataset_name):
